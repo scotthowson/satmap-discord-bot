@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+__pycache__
+config.json
+memory.json
+preview.png
+preview.py
+dcs-template
+README.md
+*.md
+docs

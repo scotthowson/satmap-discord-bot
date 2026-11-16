@@ -1,0 +1,29 @@
+services:
+  satmap-bot:
+    container_name: SatMap-Discord-Bot
+    image: ghcr.io/scotthowson/satmap-discord-bot:1.0
+    restart: unless-stopped
+    # Runs as an unprivileged user, needs no capability and writes nothing but /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      - TZ=${TZ:-UTC}
+      - DISCORD_BOT_TOKEN=${SATMAP_BOT_TOKEN}
+      - DISCORD_GUILD_ID=${SATMAP_GUILD_ID:-}
+      - DISCORD_CHANNEL_IDS=${SATMAP_CHANNEL_IDS:-}
+      - DISCORD_ROLE_IDS=${SATMAP_ROLE_IDS:-}
+      - SATMAP_URL=${SATMAP_URL:-http://host.docker.internal:8765}
+      - SATMAP_MAP_URL=${SATMAP_MAP_URL:-}
+      - SATMAP_BOARD_CHANNEL_ID=${SATMAP_BOARD_CHANNEL_ID:-}
+      - SATMAP_NEWS_CHANNEL_ID=${SATMAP_NEWS_CHANNEL_ID:-}
+      - SATMAP_ALERTS_CHANNEL_ID=${SATMAP_ALERTS_CHANNEL_ID:-}
+      - SATMAP_ALERTS_MIN_SEVERITY=${SATMAP_ALERTS_MIN_SEVERITY:-2}
+      - SATMAP_ALERTS_MENTION=${SATMAP_ALERTS_MENTION:-}
+      - SATMAP_PRIVATE_REPLIES=${SATMAP_PRIVATE_REPLIES:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

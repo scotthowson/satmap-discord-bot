@@ -1,0 +1,23 @@
+{
+	"_about": "Settings of the SatMap bot. Copy this file to config.json and fill it in; README.md explains every line. Channel, server and role numbers are Discord IDs: switch on Developer Mode (User Settings, Advanced), then right-click a channel, the server or a role and choose Copy ID. A 0 or an empty list switches that part off.",
+
+	"token": "PASTE-YOUR-BOT-TOKEN-HERE",
+	"tokenFile": "",
+
+	"satmap": "http://127.0.0.1:8765",
+	"timeoutSeconds": 6,
+
+	"guild": 0,
+	"commandChannels": [],
+	"allowRoles": [],
+	"private": false,
+	"mapUrl": "",
+	"badges": true,
+
+	"presence": true,
+	"presenceSeconds": 60,
+
+	"board": { "channel": 0, "seconds": 60 },
+	"news": { "channel": 0, "joins": true, "server": true },
+	"alerts": { "channel": 0, "minSeverity": 2, "cleared": true, "mention": "", "mentionSeverity": 3 }
+}

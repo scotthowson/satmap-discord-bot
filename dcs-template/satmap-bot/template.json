@@ -1,0 +1,119 @@
+{
+  "name": "satmap-bot",
+  "title": "SatMap Discord Bot",
+  "description": "Slash commands for a Satisfactory server that runs the SatMap mod, answered live from the game: /status, /online, /power, /stock, /rates, /machines, /logistics, /nodes, /alerts, /elevator, /digest, /harddrives, /todo. Item, machine and resource names are suggested as you type. Optional: a live status board kept up to date in one message, news (joined, left, server up or down) and alerts that are marked cleared when put right. It only reads SatMap's pages (port 8765 of the game server) and never sends anything to the game. SatMap's own webhook can post news and alerts too: use the bot's or the webhook's, not both.",
+  "category": "gaming",
+  "target_stack": "entertainment-personal",
+  "icon": "🛰️",
+  "tags": [
+    "satisfactory",
+    "satmap",
+    "discord",
+    "bot",
+    "game-server",
+    "gaming"
+  ],
+  "route_skip": [
+    "satmap-bot"
+  ],
+  "variables": [
+    {
+      "name": "SATMAP_BOT_TOKEN",
+      "label": "Discord bot token",
+      "description": "Discord developer portal → your application → Bot → Reset Token. A bot of its own, not the DCS bot's token.",
+      "type": "password",
+      "required": true
+    },
+    {
+      "name": "SATMAP_GUILD_ID",
+      "label": "Discord server ID",
+      "description": "Right-click your server → Copy Server ID (Developer Mode). Commands register there instantly; empty registers them everywhere the bot is, which can take an hour.",
+      "required": true
+    },
+    {
+      "name": "SATMAP_URL",
+      "label": "SatMap address",
+      "description": "Where the game server's SatMap answers, as seen from a container on this host. A game server on this machine (Pelican included): http://host.docker.internal:8765",
+      "default": "http://host.docker.internal:8765",
+      "required": true
+    },
+    {
+      "name": "SATMAP_MAP_URL",
+      "label": "Map link",
+      "description": "Optional link on every answer (an \"Open the map\" button), e.g. https://satmap.example.com/",
+      "required": false
+    },
+    {
+      "name": "SATMAP_CHANNEL_IDS",
+      "label": "Command channels",
+      "description": "Comma-separated channel IDs where answers are public; asked anywhere else, only the asker sees the answer. Empty: public everywhere",
+      "required": false
+    },
+    {
+      "name": "SATMAP_ROLE_IDS",
+      "label": "Allowed roles",
+      "description": "Comma-separated role IDs that may use the commands. Empty: everyone",
+      "required": false
+    },
+    {
+      "name": "SATMAP_BOARD_CHANNEL_ID",
+      "label": "Live board channel",
+      "description": "A channel ID: the bot keeps one status message there up to date. Empty: no board",
+      "required": false
+    },
+    {
+      "name": "SATMAP_NEWS_CHANNEL_ID",
+      "label": "News channel",
+      "description": "A channel ID for joined, left and server up or down. Empty: off (leave it off if SatMap's webhook already posts these)",
+      "required": false
+    },
+    {
+      "name": "SATMAP_ALERTS_CHANNEL_ID",
+      "label": "Alerts channel",
+      "description": "A channel ID for alerts (blown fuse, no fuel, machines standing still), marked cleared when put right. Empty: off (leave it off if SatMap's webhook already posts these)",
+      "required": false
+    },
+    {
+      "name": "SATMAP_ALERTS_MIN_SEVERITY",
+      "label": "Alerts from",
+      "default": "2",
+      "required": false,
+      "options": [
+        {
+          "value": "1",
+          "label": "Everything"
+        },
+        {
+          "value": "2",
+          "label": "Warnings and faults"
+        },
+        {
+          "value": "3",
+          "label": "Faults only"
+        }
+      ]
+    },
+    {
+      "name": "SATMAP_ALERTS_MENTION",
+      "label": "Ping on a fault",
+      "description": "Optional: who to ping when a fault is posted, e.g. <@&ROLE_ID> or <@USER_ID>",
+      "required": false
+    },
+    {
+      "name": "SATMAP_PRIVATE_REPLIES",
+      "label": "Answers",
+      "default": "false",
+      "required": false,
+      "options": [
+        {
+          "value": "false",
+          "label": "Public in the channel"
+        },
+        {
+          "value": "true",
+          "label": "Only to whoever asked"
+        }
+      ]
+    }
+  ]
+}

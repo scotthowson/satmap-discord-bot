@@ -1,0 +1,8 @@
+config.json
+memory.json
+memory.json.new
+.venv/
+__pycache__/
+*.token
+.env
+preview.png
