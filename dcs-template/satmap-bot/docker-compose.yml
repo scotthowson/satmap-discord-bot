@@ -13,7 +13,8 @@ services:
       - /tmp
     environment:
       - TZ=${TZ:-UTC}
-      - DISCORD_BOT_TOKEN=${SATMAP_BOT_TOKEN}
+      # The bot's token comes from the DCS secret store: keep it there as SATMAP_TOKEN
+      - DISCORD_BOT_TOKEN=${SECRETS_SATMAP_TOKEN}
       - DISCORD_GUILD_ID=${SATMAP_GUILD_ID:-}
       - DISCORD_CHANNEL_IDS=${SATMAP_CHANNEL_IDS:-}
       - DISCORD_ROLE_IDS=${SATMAP_ROLE_IDS:-}

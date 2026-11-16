@@ -1,7 +1,7 @@
 {
   "name": "satmap-bot",
   "title": "SatMap Discord Bot",
-  "description": "Slash commands for a Satisfactory server that runs the SatMap mod, answered live from the game: /status, /online, /power, /stock, /rates, /machines, /logistics, /nodes, /alerts, /elevator, /digest, /harddrives, /todo. Item, machine and resource names are suggested as you type. Optional: a live status board kept up to date in one message, news (joined, left, server up or down) and alerts that are marked cleared when put right. It only reads SatMap's pages (port 8765 of the game server) and never sends anything to the game. SatMap's own webhook can post news and alerts too: use the bot's or the webhook's, not both.",
+  "description": "Slash commands for a Satisfactory server that runs the SatMap mod, answered live from the game: /status, /online, /power, /stock, /rates, /machines, /logistics, /nodes, /alerts, /elevator, /digest, /harddrives, /todo. Item, machine and resource names are suggested as you type. Optional: a live status board kept up to date in one message, news (joined, left, server up or down) and alerts that are marked cleared when put right. The bot's token is read from the secret store: add a secret named SATMAP_TOKEN (Discord developer portal → your application → Bot → Reset Token; a bot of its own, not the DCS bot's) before you start it. It only reads SatMap's pages (port 8765 of the game server) and never sends anything to the game. SatMap's own webhook can post news and alerts too: use the bot's or the webhook's, not both.",
   "category": "gaming",
   "target_stack": "entertainment-personal",
   "icon": "🛰️",
@@ -17,13 +17,6 @@
     "satmap-bot"
   ],
   "variables": [
-    {
-      "name": "SATMAP_BOT_TOKEN",
-      "label": "Discord bot token",
-      "description": "Discord developer portal → your application → Bot → Reset Token. A bot of its own, not the DCS bot's token.",
-      "type": "password",
-      "required": true
-    },
     {
       "name": "SATMAP_GUILD_ID",
       "label": "Discord server ID",

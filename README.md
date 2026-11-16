@@ -58,8 +58,9 @@ read-only file system with every capability dropped; it writes only to `/tmp`.
 ### In DCS (dcs-orchestrator)
 
 `dcs-template/satmap-bot/` is a ready template: copy that folder into the orchestrator's `.templates/` as
-`.templates/satmap-bot/` and deploy it from the dashboard. It asks for the token, the server ID and the rest on its
-form. Its variables are named `SATMAP_...`, so it sits beside the DCS bot in one stack without sharing a token.
+`.templates/satmap-bot/` and deploy it from the dashboard. The token is read from the DCS secret store as
+`${SECRETS_SATMAP_TOKEN}`: add a secret named `SATMAP_TOKEN` first. The form asks for the server ID and the rest. Its
+variables are named `SATMAP_...`, so it sits beside the DCS bot in one stack without sharing anything.
 
 ## Settings
 
