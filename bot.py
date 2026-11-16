@@ -161,6 +161,7 @@ class SatMapBot(discord.Client):
         self.tree = app_commands.CommandTree(self)
         self.first_watch = True
         self.board_looked = False
+        self.bad_channels = set()
         for name, (_, about, argument) in data.COMMANDS.items():
             self.tree.add_command(self.make_command(name, about, argument))
 
@@ -236,14 +237,27 @@ class SatMapBot(discord.Client):
         log.info('logged in as %s, reading %s', self.user, self.cfg['satmap'])
 
     async def channel(self, channel_id):
-        if not channel_id:
+        """the channel for the board, the news or the alerts; a number that is no channel is said once and then left alone"""
+        if not channel_id or channel_id in self.bad_channels:
             return None
         found = self.get_channel(channel_id)
         if found is None:
             try:
                 found = await self.fetch_channel(channel_id)
+            except discord.NotFound:
+                self.bad_channels.add(channel_id)
+                log.warning('%d is not a channel Discord knows (it may be the ID of a user, the bot, a message or the server). Right-click the channel itself and choose Copy Channel ID, '
+                            'set it and restart the bot. What was to be posted there stays off until then; the commands work.', channel_id)
+            except discord.Forbidden:
+                self.bad_channels.add(channel_id)
+                log.warning('the bot cannot see channel %d: give it View Channel, Send Messages, Embed Links, Attach Files and Read Message History there, then restart the bot. '
+                            'What was to be posted there stays off until then; the commands work.', channel_id)
             except discord.DiscordException as error:
-                log.warning('channel %d cannot be used: %s', channel_id, error)
+                log.warning('channel %d cannot be reached just now: %s', channel_id, error)
+        if found is not None and not hasattr(found, 'send'):
+            self.bad_channels.add(channel_id)
+            log.warning('%d is a category or another kind of channel that takes no messages: name a text channel and restart the bot.', channel_id)
+            return None
         return found
 
     # -- a sign of life for whatever runs this (the container's health check reads the file's age) ---------------------
@@ -404,8 +418,15 @@ def check(cfg):
     return bad
 
 
+class NoVoiceNoise(logging.Filter):
+    """discord.py warns twice at every start that voice is not installed; this bot has no voice"""
+    def filter(self, record):
+        return 'voice will NOT be supported' not in record.getMessage()
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    logging.getLogger('discord.client').addFilter(NoVoiceNoise())
     args = sys.argv[1:]
     path = args[args.index('--config') + 1] if '--config' in args else os.path.join(HERE, 'config.json')
     in_environment = bool(os.environ.get('DISCORD_BOT_TOKEN') or os.environ.get('DISCORD_TOKEN'))
