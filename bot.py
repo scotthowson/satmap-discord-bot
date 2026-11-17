@@ -26,9 +26,8 @@ DEFAULTS = {
     'presence': True, 'presenceSeconds': 60,
     'board': {'channel': 0, 'seconds': 60},
     'news': {'channel': 0, 'joins': True, 'server': True},
-    'alerts': {'channel': 0, 'minSeverity': 2, 'cleared': True, 'mention': '', 'mentionSeverity': 3},
+    'alerts': {'channel': 0, 'minSeverity': 2, 'cleared': True, 'mention': '', 'mentionSeverity': 3, 'regroupMinutes': 10},
 }
-ALERT_BADGE = {'fuse': 'fuse', 'power': 'power', 'overdraw': 'power', 'nopower': 'power', 'battery': 'battery', 'fuel': 'fuel', 'full': 'full', 'idle': 'idle', 'norecipe': 'norecipe'}
 
 
 def load_config(path):
@@ -70,7 +69,7 @@ ENVIRONMENT = [
     ('SATMAP_BOARD_CHANNEL_ID', ('board', 'channel'), int), ('SATMAP_BOARD_SECONDS', ('board', 'seconds'), int),
     ('SATMAP_NEWS_CHANNEL_ID', ('news', 'channel'), int), ('SATMAP_NEWS_JOINS', ('news', 'joins'), truth), ('SATMAP_NEWS_SERVER', ('news', 'server'), truth),
     ('SATMAP_ALERTS_CHANNEL_ID', ('alerts', 'channel'), int), ('SATMAP_ALERTS_MIN_SEVERITY', ('alerts', 'minSeverity'), int),
-    ('SATMAP_ALERTS_CLEARED', ('alerts', 'cleared'), truth), ('SATMAP_ALERTS_MENTION', ('alerts', 'mention'), str), ('SATMAP_ALERTS_MENTION_SEVERITY', ('alerts', 'mentionSeverity'), int),
+    ('SATMAP_ALERTS_CLEARED', ('alerts', 'cleared'), truth), ('SATMAP_ALERTS_REGROUP_MINUTES', ('alerts', 'regroupMinutes'), float), ('SATMAP_ALERTS_MENTION', ('alerts', 'mention'), str), ('SATMAP_ALERTS_MENTION_SEVERITY', ('alerts', 'mentionSeverity'), int),
 ]
 
 def apply_environment(cfg):
@@ -356,36 +355,93 @@ class SatMapBot(discord.Client):
         self.memory.set('players', names)
 
         if alert_channel:
-            open_now = {a['id']: a for a in (state.get('alerts') or {}).get('list') or [] if a.get('id') and a.get('sev', 0) >= int(alert_cfg['minSeverity'])}
-            told = dict(self.memory.get('alerts') or {})
-            if self.first_watch and not told:
-                told = {alert_id: 0 for alert_id in open_now}       # what was already open when the bot first looked is not news
-            for alert_id, a in open_now.items():
-                if alert_id in told:
-                    continue
-                card = data.card(a.get('text') or a.get('n') or 'Alert', [a.get('more') or ''], data.BAD if a.get('sev', 0) >= 3 else data.WARN, ALERT_BADGE.get(a.get('kind'), 'alerts'),
-                                 [('What', a.get('n') or 'the factory', True), ('Where', self.sm.place(a.get('x'), a.get('y')), True), ('Since', data.when(a['since']) if a.get('since') else 'just now', True)])
-                mention = alert_cfg['mention'] if alert_cfg['mention'] and a.get('sev', 0) >= int(alert_cfg['mentionSeverity']) else None
-                message = await self.post(alert_channel, *render(card, self.cfg['badges']), content=mention)
-                told[alert_id] = message.id if message else 0
-            for alert_id in [i for i in told if i not in open_now]:
-                message_id = told.pop(alert_id)
-                if message_id and alert_cfg['cleared']:
-                    try:
-                        message = await alert_channel.fetch_message(message_id)
-                        embed = message.embeds[0] if message.embeds else discord.Embed()
-                        embed.colour = data.GOOD
-                        embed.title = ('Cleared: ' + (embed.title or ''))[:256]
-                        embed.set_footer(text='Cleared after %s' % data.ago((discord.utils.utcnow() - message.created_at).total_seconds()))
-                        await message.edit(embed=embed)
-                    except discord.DiscordException as error:
-                        log.info('alert %s: its message could not be marked cleared: %s', alert_id, error)
-            self.memory.set('alerts', told)
+            await self.problems_report(alert_channel, alert_cfg, state)
         self.first_watch = False
 
     @watch_loop.before_loop
     async def before_watch(self):
         await self.wait_until_ready()
+
+    async def problems_report(self, channel, alert_cfg, state):
+        """One report for everything that is wrong, edited in place while the trouble lasts (not a message a machine).
+
+        A new message, which is what makes Discord notify, is posted when trouble starts, and again when something
+        new goes wrong more than "regroupMinutes" after the last one; everything else is an edit of the report."""
+        now = time.time()
+        open_now = {a['id']: a for a in (state.get('alerts') or {}).get('list') or [] if a.get('id') and a.get('sev', 0) >= int(alert_cfg['minSeverity'])}
+        incident = self.memory.get('incident')
+        if incident is None and self.first_watch:
+            incident = await self.adopt_report(channel)
+        if incident is None:
+            if not open_now:
+                return
+            incident = {'message': 0, 'posted': 0, 'started': now, 'seen': {}, 'cleared': {}}
+        seen, cleared = incident['seen'], incident['cleared']
+        fresh = [i for i in open_now if i not in seen or i in cleared]
+        gone = [i for i in seen if i not in open_now and i not in cleared]
+        for i in open_now:
+            seen[i] = open_now[i]
+            cleared.pop(i, None)
+        for i in gone:
+            cleared[i] = now
+        changed = bool(fresh or gone) or not incident['message']
+        if not changed:
+            return
+        done = [(seen[i], t) for i, t in cleared.items()] if alert_cfg['cleared'] else []
+        card = data.problems(self.sm, list(open_now.values()), done, incident['started'], now)
+        embed, files = render(card, self.cfg['badges'])
+        worst = max((a.get('sev', 0) for a in open_now.values()), default=0)
+        again = bool(fresh) and incident['message'] and now - incident['posted'] > 60 * float(alert_cfg['regroupMinutes'])
+        if not incident['message'] or again:
+            if again:                                             # the older report stays as the record of what it showed
+                await self.edit_report(channel, incident['message'], note='Carried on in a newer report below.')
+            mention = alert_cfg['mention'] if alert_cfg['mention'] and worst >= int(alert_cfg['mentionSeverity']) else None
+            message = await self.post(channel, embed, files, content=mention)
+            incident['message'], incident['posted'] = (message.id if message else 0), now
+            if again:
+                incident['cleared'] = {}
+                incident['seen'] = dict(open_now)
+        else:
+            await self.edit_report(channel, incident['message'], embed, files)
+        if not open_now:
+            log.info('alerts: all clear after %s', data.ago(now - incident['started']))
+            self.memory.set('incident', None)
+        else:
+            self.memory.set('incident', incident)
+
+    async def edit_report(self, channel, message_id, embed=None, files=None, note=None):
+        try:
+            message = channel.get_partial_message(message_id)
+            if embed is None:                                     # only a closing line under an older report
+                old = await channel.fetch_message(message_id)
+                if not old.embeds:
+                    return
+                embed, files = old.embeds[0], []
+                embed.set_footer(text=note)
+                # Its pictures are the message's own attachments: point at them again, or Discord shows them large.
+                names = {a.filename for a in old.attachments}
+                if 'satmap.png' in names:
+                    embed.set_author(name='SatMap', icon_url='attachment://satmap.png')
+                badge = next((n for n in sorted(names) if n != 'satmap.png'), None)
+                if badge:
+                    embed.set_thumbnail(url='attachment://' + badge)
+                await message.edit(embed=embed)
+                return
+            # New pictures replace the old ones, so the report never carries a picture it does not show.
+            await message.edit(embed=embed, attachments=files)
+        except discord.DiscordException as error:
+            log.info('alerts: the report %s could not be edited: %s', message_id, error)
+
+    async def adopt_report(self, channel):
+        """After a restart with nothing remembered: take up the bot's own last open report instead of posting another."""
+        try:
+            async for old in channel.history(limit=30):
+                if old.author.id == self.user.id and old.embeds and (old.embeds[0].footer.text or '').startswith('Problems · worst first'):
+                    log.info('alerts: carrying on with the report of %s', old.created_at.strftime('%H:%M'))
+                    return {'message': old.id, 'posted': old.created_at.timestamp(), 'started': old.created_at.timestamp(), 'seen': {}, 'cleared': {}}
+        except discord.DiscordException as error:
+            log.info('alerts: the channel\'s older messages could not be read: %s', error)
+        return None
 
     async def post(self, channel, embed, files, content=None):
         if channel is None:
@@ -414,6 +470,14 @@ def check(cfg):
         problem = 'TOO LONG' if size > 6000 else 'not answered' if card['title'] in ('That did not work', 'The map\'s server is not answering') else ''
         bad += 1 if problem else 0
         print('  /%-11s %-44s %4d characters, %d fields, badge %s %s' % (name, card['title'][:44], size, len(embed.fields), card['badge'], problem))
+    try:
+        rows = ((sm.get('state') or {}).get('alerts') or {}).get('list') or []
+        report = data.problems(sm, [r for r in rows if r.get('sev', 0) >= int(cfg['alerts']['minSeverity'])])
+        embed, files = render(report, cfg['badges'])
+        print('  %-12s %-44s %4d characters, badge %s %s' % ('the report', report['title'][:44], len(embed), report['badge'], 'TOO LONG' if len(embed) > 6000 else ''))
+        bad += 1 if len(embed) > 6000 else 0
+    except data.Unreachable:
+        pass
     print('the line under the bot\'s name: %s' % data.presence(sm))
     return bad
 

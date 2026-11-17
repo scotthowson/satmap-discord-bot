@@ -367,6 +367,97 @@ def alerts(sm, arg=None):
     worst = rows[0].get('sev', 1)
     return card(plural(len(rows), 'open alert'), lines + (['… and %d more' % (len(rows) - 10)] if len(rows) > 10 else []), BAD if worst >= 3 else WARN, 'alerts', footer='Worst first  ·  ' + stamp(sm))
 
+# ---- the problems report: what the alerts channel shows -----------------------------------------------------------
+# One report for everything that is wrong, not one message a machine: grouped by what is wrong and where, worst
+# first, with where to find it and what usually fixes it.  The bot edits it in place while the trouble lasts.
+KIND_TITLE = {'fuse': 'Fuse blown', 'overdraw': 'Grid at its limit', 'power': 'Power', 'nopower': 'No power line', 'battery': 'Power Storage running down',
+              'fuel': 'Fuel', 'full': 'Output full', 'idle': 'Waiting for input', 'norecipe': 'No recipe set'}
+FIX = {
+    'fuse': 'The grid was asked for more than it makes. Add power or switch machines off, then pull the fuse lever in any Power Pole or generator of that grid.',
+    'overdraw': 'The grid is close to tripping: add generators or Power Storage before it does.',
+    'nopower': 'Check the Power Line from the nearest Power Pole to each of them.',
+    'battery': 'The grid uses more than it makes and is living off its Power Storage: add generators.',
+    'fuel': 'Put fuel in, or follow its belt or pipe back to where the fuel stops.',
+    'full': 'Its product has nowhere to go: clear the belt behind it or empty the store at its end.',
+    'idle': 'It waits for something to come in: follow its inlet back to where the belt stops.',
+    'norecipe': 'Open it and choose a recipe.',
+}
+
+def spot(x, y):
+    """a place as the map's search takes it: metres, east then south"""
+    return '%d %d' % (round((x or 0) / 100.0), round((y or 0) / 100.0))
+
+def problems(sm, open_alerts, cleared=(), started=None, now=None):
+    """open_alerts: SatMap's alert rows.  cleared: (row, cleared at unix) of this same trouble, shown struck off."""
+    now = now or time.time()
+    def what(a):
+        """what is wrong, without whose it is: "Smelter has no power line" -> "No power line" """
+        text, name = a.get('text') or '', a.get('n') or ''
+        if name and text.startswith(name + ' '):
+            rest = text[len(name) + 1:]
+            for lead in ('is ', 'has ', 'are ', 'have '):
+                if rest.startswith(lead):
+                    rest = rest[len(lead):]
+                    break
+            return rest[:1].upper() + rest[1:]
+        return text or KIND_TITLE.get(a.get('kind'), a.get('kind') or 'A problem')
+    groups = {}
+    for a in open_alerts:
+        place = sm.place(a.get('x'), a.get('y'))
+        groups.setdefault((a.get('kind') or 'other', place, what(a), a.get('more') or ''), []).append(a)
+    ranked = sorted(groups.items(), key=lambda kv: (-max(a.get('sev', 0) for a in kv[1]), min(a.get('since', now) for a in kv[1]), kv[0]))
+    fuse_since = min((a.get('since', now) for a in open_alerts if a.get('kind') == 'fuse'), default=None)
+    lines = []
+    for (kind, place, wrong, _), rows in ranked[:10]:
+        worst = max(a.get('sev', 0) for a in rows); since = min(a.get('since', now) for a in rows)
+        names = {}
+        for a in rows:
+            names[a.get('n') or 'something'] = names.get(a.get('n') or 'something', 0) + 1
+        who = ', '.join('%s ×%d' % (n, c) if c > 1 else n for n, c in sorted(names.items(), key=lambda kv: (-kv[1], kv[0])))
+        head = (rows[0].get('text') or wrong) if len(rows) == 1 else '%s · %s' % (wrong, plural(len(rows), 'machine'))
+        more = sorted({a['more'] for a in rows if a.get('more')})
+        lines.append('%s **%s**  ·  %s' % (SEV.get(worst, '⚪'), head, when(since)))
+        if len(rows) > 1:
+            lines.append(who)
+        if more and len(more) <= 2:
+            lines.append(' · '.join(more))
+        cx = sum(a.get('x') or 0 for a in rows) / len(rows); cy = sum(a.get('y') or 0 for a in rows) / len(rows)
+        lines.append('-# 📍 %s  ·  search the map for `%s`' % (place, spot(cx, cy)))
+        tip = FIX.get(kind)
+        unpowered = kind == 'nopower' or any('no power' in (a.get('more') or '').lower() for a in rows)
+        if kind == 'idle' and unpowered:
+            tip = 'It has no power: see the power problems in this report.'
+        if kind != 'fuse' and fuse_since is not None and (unpowered or kind == 'battery') and since >= fuse_since:
+            tip = 'Began %s after the fuse blew: deal with the fuse first.' % ago(max(since - fuse_since, 0))
+        if tip:
+            lines.append('-# 🔧 %s' % tip)
+        lines.append('')
+    if len(ranked) > 10:
+        lines.append('… and %s more; /alerts lists every one.' % plural(len(ranked) - 10, 'group'))
+    done = sorted(cleared, key=lambda rc: -rc[1])
+    if done:
+        told = ['%s (%s)' % (r.get('text') or r.get('n') or 'a problem', ago(max(c - r.get('since', c), 0))) for r, c in done[:8]]
+        lines.append('✅ **Fixed:** ' + '; '.join(told) + (' and %d more' % (len(done) - 8) if len(done) > 8 else ''))
+    worst = max((a.get('sev', 0) for a in open_alerts), default=0)
+    places = len({key[1] for key in groups})
+    if not open_alerts:
+        title = 'All clear'
+        lines = (['🟢 Everything the map watches is running again.'] + ([''] + lines[-1:] if done else []))
+        colour, badge = GOOD, 'cleared'
+        footer = 'Problems · over%s' % (' after ' + ago(max(now - started, 0)) if started else '')
+    else:
+        lead = next((a for a in sorted(open_alerts, key=lambda a: (-a.get('sev', 0), a.get('since', now)))), None)
+        title = (lead.get('text') or 'A problem') if len(open_alerts) == 1 else '%s in %s' % (plural(len(open_alerts), 'problem'), plural(places, 'place'))
+        colour = BAD if worst >= 3 else WARN
+        badge = {'fuse': 'fuse', 'power': 'power', 'overdraw': 'power', 'nopower': 'power', 'battery': 'battery', 'fuel': 'fuel', 'full': 'full', 'idle': 'idle',
+                 'norecipe': 'norecipe'}.get(lead.get('kind'), 'alerts')
+        footer = 'Problems · worst first · kept up to date · %s' % stamp(sm)
+    while lines and not lines[-1]:
+        lines.pop()
+    out = card(title, lines, colour, badge, footer=footer)
+    out['lines'] = lines                      # blank lines keep the groups apart
+    return out
+
 def elevator(sm, arg=None):
     state = sm.get('state') or {}
     e = state.get('elevator') or {}

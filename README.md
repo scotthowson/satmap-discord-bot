@@ -30,7 +30,13 @@ Item, machine and resource names are suggested as you type. Each of these is swi
 - **Live board**: one message with the status and the open alerts, edited in place. After a restart the bot finds
   its own board message again, so the channel never fills up with old boards.
 - **News**: a pioneer joined or left, the server went down or came back.
-- **Alerts**: a message when something goes wrong, marked "Cleared" when it is put right.
+- **Alerts**: one problems report, not a message a machine. Everything that is wrong is grouped by what and where
+  ("No power line · 5 machines: Smelter ×3, Constructor, Crusher"), worst first, each group with its place, the
+  coordinates to type into the map's search, since when, and what usually fixes it; what follows a blown fuse says so.
+  The report is edited in place as things break and get fixed and ends as "All clear" with what was put right. A new
+  message (the thing Discord notifies about) comes only when trouble starts, and again when something new goes wrong
+  more than `SATMAP_ALERTS_REGROUP_MINUTES` (10) after the last one. After a restart the bot takes up its own last
+  open report.
 
 SatMap can post news and alerts itself through its webhook. Use the bot's or the webhook's for those, not both, or
 each one arrives twice.
@@ -84,7 +90,8 @@ names in the second column.
 | `TZ` | `TZ` | Time zone for the log | `UTC` |
 
 Also read by the image, with sensible defaults: `SATMAP_BOARD_SECONDS` (60), `SATMAP_PRESENCE` (true),
-`SATMAP_PRESENCE_SECONDS` (60), `SATMAP_NEWS_JOINS` (true), `SATMAP_NEWS_SERVER` (true), `SATMAP_ALERTS_CLEARED`
+`SATMAP_PRESENCE_SECONDS` (60), `SATMAP_NEWS_JOINS` (true), `SATMAP_NEWS_SERVER` (true), `SATMAP_ALERTS_CLEARED`,
+`SATMAP_ALERTS_REGROUP_MINUTES` (10)
 (true), `SATMAP_ALERTS_MENTION_SEVERITY` (3), `SATMAP_BADGES` (true), `SATMAP_TIMEOUT_SECONDS` (6),
 `SATMAP_DATA_DIR` (a folder to keep `memory.json` in; without one it lives in `/tmp`).
 

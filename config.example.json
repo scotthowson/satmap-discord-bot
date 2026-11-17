@@ -19,5 +19,5 @@
 
 	"board": { "channel": 0, "seconds": 60 },
 	"news": { "channel": 0, "joins": true, "server": true },
-	"alerts": { "channel": 0, "minSeverity": 2, "cleared": true, "mention": "", "mentionSeverity": 3 }
+	"alerts": { "channel": 0, "minSeverity": 2, "cleared": true, "mention": "", "mentionSeverity": 3, "regroupMinutes": 10 }
 }
